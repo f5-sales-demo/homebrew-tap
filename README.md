@@ -1,9 +1,9 @@
 # homebrew-tap
 
-Homebrew formulae for f5xc-salesdemos.
+Homebrew formulae for f5-sales-demo.
 
 ## Install
 
 ```
-brew install f5xc-salesdemos/tap/opencode
+brew install f5-sales-demo/tap/opencode
 ```

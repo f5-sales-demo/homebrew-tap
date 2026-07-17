@@ -4,16 +4,16 @@
 class ClaudeOffice < Formula
   desc "Local CORS proxy so the Claude for Office add-in can use a self-hosted LLM gateway"
   homepage "https://github.com/f5-sales-demo/claude-office"
-  version "0.1.0"
+  version "0.1.1"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/f5-sales-demo/claude-office/releases/download/v0.1.0/claude-office-darwin-arm64.zip"
-      sha256 "6486ee8444196c9ffaf6149df444ca6416ec9de440053ee63c4d0ea2dc4b541f"
+      url "https://github.com/f5-sales-demo/claude-office/releases/download/v0.1.1/claude-office-darwin-arm64.zip"
+      sha256 "4d188ed531dc5446030755d75f593f75894fa08e1aff19e00dcceb6cdaa68d08"
     else
-      url "https://github.com/f5-sales-demo/claude-office/releases/download/v0.1.0/claude-office-darwin-x64.zip"
-      sha256 "291899a07ca05bbf5946451be6a5228db191d192c7a2ce983c9c23749b514f05"
+      url "https://github.com/f5-sales-demo/claude-office/releases/download/v0.1.1/claude-office-darwin-x64.zip"
+      sha256 "89d69b679f4e455603399d775f0436bb75b4425bb5a40a13c463818a7f7f48c0"
     end
   end
 

@@ -5,6 +5,7 @@ class Herdr < Formula
   sha256 "e724080aab0650e23acde7d46aaaaf1438f2c496c8c6d811da56cbca57e22a24"
   license "AGPL-3.0-or-later"
   version "0.7.5"
+  revision 1
 
   depends_on "rust" => :build
   depends_on "zig@0.15" => :build # upstream issue, https://github.com/ogulcancelik/herdr/issues/285

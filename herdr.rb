@@ -1,8 +1,8 @@
 class Herdr < Formula
-  desc "Agent multiplexer for your terminal (f5-sales-demo fork: per-agent resume args)"
+  desc "Agent multiplexer for your terminal (f5-sales-demo fork: resume args + xcsh agent)"
   homepage "https://github.com/f5-sales-demo/herdr"
-  url "https://github.com/f5-sales-demo/herdr/archive/refs/tags/v0.7.5-xcsh1.tar.gz"
-  sha256 "4b14a1ff3465e4a72b00eb419785dab562be5e07203973d4d9cd519f4295a05e"
+  url "https://github.com/f5-sales-demo/herdr/archive/refs/tags/v0.7.5-xcsh2.tar.gz"
+  sha256 "e724080aab0650e23acde7d46aaaaf1438f2c496c8c6d811da56cbca57e22a24"
   license "AGPL-3.0-or-later"
   version "0.7.5"
 

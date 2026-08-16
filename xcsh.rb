@@ -4,22 +4,22 @@
 class Xcsh < Formula
   desc "AI coding agent for the terminal"
   homepage "https://github.com/f5-sales-demo/xcsh"
-  version "20.19.3"
+  version "20.13.1"
 
   depends_on "ripgrep"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v20.19.3/xcsh-darwin-x64.zip"
-      sha256 "0da68f7e0580ac9f5b5123ad416c4f7bbe560760b553c228921f0a8cc52c4a41"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v20.13.1/xcsh-darwin-x64.zip"
+      sha256 "15cc9cbc31711216721f5984f376d9c4bd8ff0155c6635589604080f7fcb471d"
 
       def install
         bin.install "xcsh"
       end
     end
     if Hardware::CPU.arm?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v20.19.3/xcsh-darwin-arm64.zip"
-      sha256 "e328d2d7b3bbe095837a24b9b530218eb880dbb9eb829f72e57bc726945b3ea9"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v20.13.1/xcsh-darwin-arm64.zip"
+      sha256 "682a563877a9701af0c5ae2586c7499cce2fbc94f3ed82e2dd9738289a4764bd"
 
       def install
         bin.install "xcsh"
@@ -29,16 +29,16 @@ class Xcsh < Formula
 
   on_linux do
     if Hardware::CPU.intel? and Hardware::CPU.is_64_bit?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v20.19.3/xcsh-linux-x64.tar.gz"
-      sha256 "09ec7bd737cc29ddaa3b0db94172b7a23a5a359dcdd8333510e14db4c3605a5f"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v20.13.1/xcsh-linux-x64.tar.gz"
+      sha256 "c146c62383ed408e2d7a6f3a5665cdc686086650f9d76f97cb206f0aea5ffa9c"
 
       def install
         bin.install "xcsh"
       end
     end
     if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v20.19.3/xcsh-linux-arm64.tar.gz"
-      sha256 "471dc5521b2af73052777c99549a3253de8af960c3bae43e7162fd50cbdea1e3"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v20.13.1/xcsh-linux-arm64.tar.gz"
+      sha256 "ef334d7a6c5477f63590f9e50078c0cb56cd6c2063ccdadcfd130864986ed3a8"
 
       def install
         bin.install "xcsh"

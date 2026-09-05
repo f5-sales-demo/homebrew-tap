@@ -4,14 +4,14 @@
 class Xcsh < Formula
   desc "AI coding agent for the terminal"
   homepage "https://github.com/f5-sales-demo/xcsh"
-  version "21.11.9"
+  version "21.12.0"
 
   depends_on "ripgrep"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.9/xcsh-darwin-x64.zip"
-      sha256 "e5ec878a86338b6d39126771a435de3369ac88acc949fc21ba6f5382303d2f5c"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.12.0/xcsh-darwin-x64.zip"
+      sha256 "7c59adf5cce4f873274e1b7c8fd6306d815a6c601df212c03f7352fa6b0a10d7"
 
       def install
         bin.install "xcsh"
@@ -19,8 +19,8 @@ class Xcsh < Formula
       end
     end
     if Hardware::CPU.arm?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.9/xcsh-darwin-arm64.zip"
-      sha256 "7b053048d40d59d65f157747b0f183c6bbd977fc40aed21dfd087b886d018580"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.12.0/xcsh-darwin-arm64.zip"
+      sha256 "dcfb3d14fe992f99aeca5f709eaaeef815ce9f527c86eaab4a1677af3a721d5e"
 
       def install
         bin.install "xcsh"
@@ -31,16 +31,16 @@ class Xcsh < Formula
 
   on_linux do
     if Hardware::CPU.intel? and Hardware::CPU.is_64_bit?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.9/xcsh-linux-x64.tar.gz"
-      sha256 "e3e0c3f41bbb4acc157078b472ffc7d2d9f3d3d9a51e2e66a7172a03b3b0de3c"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.12.0/xcsh-linux-x64.tar.gz"
+      sha256 "486a12fed79c9221aa4b6fa2d15e10ab75ef2a2c3e9c8ea55db2f7d2e734acde"
 
       def install
         bin.install "xcsh"
       end
     end
     if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.9/xcsh-linux-arm64.tar.gz"
-      sha256 "4382fcdcaea8d1a0c686dac356acd0db1dcbcac609a83d4afdfdeb1acfdc18bd"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.12.0/xcsh-linux-arm64.tar.gz"
+      sha256 "a4025a26c6e156be2bec9b3aeb7a17e5a3bee839325ea60e04c3ab50aa69e308"
 
       def install
         bin.install "xcsh"

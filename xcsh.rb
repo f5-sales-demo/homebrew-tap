@@ -4,41 +4,43 @@
 class Xcsh < Formula
   desc "AI coding agent for the terminal"
   homepage "https://github.com/f5-sales-demo/xcsh"
-  version "21.11.8"
+  version "21.11.9"
 
   depends_on "ripgrep"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.8/xcsh-darwin-x64.zip"
-      sha256 "ebf68789746cdeacf61538a2edcd32bac92de3911598a122cc73070fe82121cf"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.9/xcsh-darwin-x64.zip"
+      sha256 "e5ec878a86338b6d39126771a435de3369ac88acc949fc21ba6f5382303d2f5c"
 
       def install
         bin.install "xcsh"
+        libexec.install Dir["pi_natives.*.node"]
       end
     end
     if Hardware::CPU.arm?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.8/xcsh-darwin-arm64.zip"
-      sha256 "85b893f8f48fb55cfb2bc61d89e254c310745b4471c316619752e98b19b4b0db"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.9/xcsh-darwin-arm64.zip"
+      sha256 "7b053048d40d59d65f157747b0f183c6bbd977fc40aed21dfd087b886d018580"
 
       def install
         bin.install "xcsh"
+        libexec.install Dir["pi_natives.*.node"]
       end
     end
   end
 
   on_linux do
     if Hardware::CPU.intel? and Hardware::CPU.is_64_bit?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.8/xcsh-linux-x64.tar.gz"
-      sha256 "d10572ce3b0aedf8f7c20f7f02fe41aee3144e54de98ea26f85f5877519fb6e0"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.9/xcsh-linux-x64.tar.gz"
+      sha256 "e3e0c3f41bbb4acc157078b472ffc7d2d9f3d3d9a51e2e66a7172a03b3b0de3c"
 
       def install
         bin.install "xcsh"
       end
     end
     if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?
-      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.8/xcsh-linux-arm64.tar.gz"
-      sha256 "2eeaff8946537a4f2902b5b26b540d579daba08acea68178c00a20a22ab12ef5"
+      url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.11.9/xcsh-linux-arm64.tar.gz"
+      sha256 "4382fcdcaea8d1a0c686dac356acd0db1dcbcac609a83d4afdfdeb1acfdc18bd"
 
       def install
         bin.install "xcsh"

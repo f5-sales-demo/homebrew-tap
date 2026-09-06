@@ -1,9 +1,9 @@
 cask "xcsh" do
-  version "21.13.2"
+  version "21.14.0"
   arch arm: "arm64", intel: "x64"
-  sha256 arm: "bc4d43e9086caf595f4607d8e5e97541912fa2fdd306f77b81cfdbe00d1f662d", intel: "6cadfba3b66c3311eab572ebcacebfe08b40d7ffde312016228abaf78be12f64"
+  sha256 arm: "0dd6c2a969c6fc86e0dcb289e18e1185ee0eae629a67e1ff5f301ad3b943e521", intel: "a19c1f4d15520ed34f1ca647a7a2ea99395ef9dc9b0b40b32bf9942951cd03ff"
 
-  url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.13.2/xcsh-darwin-#{arch}.pkg"
+  url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.14.0/xcsh-darwin-#{arch}.pkg"
   name "xcsh"
   desc "AI coding agent for the terminal"
   homepage "https://github.com/f5-sales-demo/xcsh"

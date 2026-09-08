@@ -11,9 +11,9 @@ class GhosttyAutomation < Formula
   depends_on :macos
 
   resource "peekaboo-mcp-proxy" do
-    url "https://raw.githubusercontent.com/f5-sales-demo/homebrew-tap/4bbef90148419a1bdc3a9f22f7ee7701ba1c6cf3/libexec/peekaboo-mcp-proxy",
+    url "https://raw.githubusercontent.com/f5-sales-demo/homebrew-tap/b68eb6d27600604c1468c979078115104903c0e9/libexec/peekaboo-mcp-proxy",
         using: :nounzip
-    sha256 "76fb530252c01d25fa412c7b3e86f8ee381a820350c8c335fad24c90d65dc8f2"
+    sha256 "e893287bca164e3b4ac1a82e03e8d15afa815114641ececdab203e483b66a151"
   end
 
   resource "mcp-contract" do

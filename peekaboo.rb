@@ -9,6 +9,10 @@ class Peekaboo < Formula
   sha256 "a7f706a1847e9e8513fd6f2f0a8f02cbdafe8f07d2a2ca028f2213b06f185e08"
   license "MIT"
 
+  livecheck do
+    skip "Pinned for managed Ghostty automation; upgrades require recertification"
+  end
+
   depends_on :macos
 
   def install

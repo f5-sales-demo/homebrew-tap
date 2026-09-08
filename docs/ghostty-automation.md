@@ -15,10 +15,9 @@ ghostty-automation setup
 `f5-sales-demo/tap/peekaboo-app` cask, verifies their versions and Developer ID
 identity, starts the app and Peekaboo's signed on-demand daemon, and waits for
 its exact Bridge socket at `~/Library/Application Support/Peekaboo/daemon.sock`.
-Approve Screen
-Recording, Accessibility, and Event Synthesizing for Peekaboo when System
-Settings prompts. The tool does not create a PPPC profile or alter device
-management.
+Approve Screen Recording, Accessibility, and Event Synthesizing for Peekaboo
+when System Settings prompts. The tool does not create a PPPC profile or alter
+device management.
 
 The generated Codex entry is enclosed by explicit ownership markers. Setup
 refuses an existing unmanaged `[mcp_servers.peekaboo]` table and otherwise

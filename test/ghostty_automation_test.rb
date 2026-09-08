@@ -13,7 +13,7 @@ class GhosttyAutomationConfigTest < Minitest::Test
       sentinel: "/Users/test/Library/Application Support/GhosttyAutomation/DISABLED",
       audit_log: "/Users/test/Library/Logs/GhosttyAutomation/audit.jsonl",
       peekaboo: "/opt/homebrew/bin/peekaboo",
-      socket: "/Users/test/Library/Application Support/Peekaboo/bridge.sock",
+      socket: "/Users/test/Library/Application Support/Peekaboo/daemon.sock",
     })
   end
 
@@ -29,6 +29,7 @@ class GhosttyAutomationConfigTest < Minitest::Test
     assert_equal first, File.binread(@path)
     assert_includes first, "model = \"gpt-5\""
     assert_includes first, "[mcp_servers.peekaboo]"
+    assert_includes first, '"--bridge-socket", "/Users/test/Library/Application Support/Peekaboo/daemon.sock"'
   end
 
   def test_enable_disable_changes_only_managed_block

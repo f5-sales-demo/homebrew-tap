@@ -13,17 +13,28 @@ ghostty-automation setup
 
 `setup` installs `f5-sales-demo/tap/peekaboo` and the
 `f5-sales-demo/tap/peekaboo-app` cask, verifies their versions and Developer ID
-identity, starts the app, and waits for its exact Bridge socket at
-`~/Library/Application Support/Peekaboo/bridge.sock`.
-
-Approve Screen Recording, Accessibility, and Event Synthesizing for
-`/Applications/Peekaboo.app` when System Settings prompts. The tool does not
-create a PPPC profile or alter device management.
+identity, starts the app and Peekaboo's signed on-demand daemon, and waits for
+its exact Bridge socket at `~/Library/Application Support/Peekaboo/daemon.sock`.
+Approve Screen
+Recording, Accessibility, and Event Synthesizing for Peekaboo when System
+Settings prompts. The tool does not create a PPPC profile or alter device
+management.
 
 The generated Codex entry is enclosed by explicit ownership markers. Setup
 refuses an existing unmanaged `[mcp_servers.peekaboo]` table and otherwise
 preserves the rest of `~/.codex/config.toml` byte-for-byte. Restart Codex after
 setup, enable, or disable, then confirm with `codex mcp list`.
+
+Peekaboo 4.3.2 cannot initialize its `browser` tool through the GUI app's
+`bridge.sock`, because browser sessions require an on-demand host. The managed
+MCP entry therefore uses the daemon's explicit `daemon.sock`. `doctor` verifies
+the signed `boo.peekaboo.peekaboo` identity, the `onDemand` host kind, browser
+handoff capability, and all three permissions. This keeps all 26 pinned MCP
+tools available without modifying or re-signing Peekaboo.
+
+To enable Chrome page automation, open `chrome://inspect/#remote-debugging`,
+enable remote debugging for the intended profile, and accept Chrome's prompt.
+Then run `peekaboo browser connect --channel stable --foreground` once.
 
 ## Operations
 

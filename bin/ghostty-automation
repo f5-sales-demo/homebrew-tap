@@ -240,6 +240,7 @@ module GhosttyAutomation
       FileUtils.rm_f(@log_dir/"audit.jsonl") if purge
       revoke_tcc if revoke
       uninstall_package("--cask", "f5-sales-demo/tap/peekaboo-app")
+      uninstall_package("--formula", "f5-sales-demo/tap/ghostty-automation")
       uninstall_package("--formula", "f5-sales-demo/tap/peekaboo")
       remove_empty_owned_directories
       @out.puts("Removed GhosttyAutomation-owned configuration and Peekaboo packages.")
@@ -371,6 +372,14 @@ module GhosttyAutomation
 
     def doctor_report
       checks = {}
+      checks["formula_version"] = check do
+        installed = @runner.run(@brew, "list", "--versions", "f5-sales-demo/tap/peekaboo").stdout.split
+        raise Error, "expected Homebrew peekaboo #{PEEKABOO_VERSION}" unless installed.last == PEEKABOO_VERSION
+      end
+      checks["cask_version"] = check do
+        installed = @runner.run(@brew, "list", "--cask", "--versions", "f5-sales-demo/tap/peekaboo-app").stdout.split
+        raise Error, "expected Homebrew peekaboo-app #{PEEKABOO_VERSION}" unless installed.last == PEEKABOO_VERSION
+      end
       checks["cli_version"] = check { verify_version! }
       checks["cli_identity"] = check { verify_code_identity!(@peekaboo, CLI_ID) }
       checks["app_identity"] = check { verify_code_identity!(@app, APP_ID) }
@@ -476,6 +485,12 @@ module GhosttyAutomation
       end
       @out.puts("PASS mcp kill switch and audit redaction")
       @out.puts("PASS mcp initialization and 4.3.2 tools/list contract")
+      source = @env["GHOSTTY_SOURCE_DIR"]
+      return unless source
+
+      acceptance = File.join(source, "macos", "scripts", "peekaboo-mcp-acceptance.rb")
+      raise Error, "missing #{acceptance}" unless File.file?(acceptance)
+      system("/usr/bin/ruby", acceptance) || raise(Error, "Peekaboo MCP Ghostty fixture acceptance failed")
     end
 
     def read_mcp_contract(sentinel, audit)

@@ -8,6 +8,7 @@ require "open3"
 require "optparse"
 require "pathname"
 require "tempfile"
+require "timeout"
 
 module GhosttyAutomation
   VERSION = "1.0.0"
@@ -293,6 +294,18 @@ module GhosttyAutomation
       candidates.find(&:file?) || candidates.first
     end
 
+    def contract_snapshot
+      override = @env["GHOSTTY_AUTOMATION_CONTRACT"]
+      return Pathname(override).expand_path if override
+
+      executable = Pathname(File.realpath($PROGRAM_NAME))
+      candidates = [
+        executable.dirname.parent/"libexec/peekaboo-mcp-contract-4.3.2.json",
+        executable.dirname.parent/"share/ghostty-automation/peekaboo-mcp-contract-4.3.2.json",
+      ]
+      candidates.find(&:file?) || candidates.first
+    end
+
     def wait_for_socket(timeout: 30)
       deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
       until @socket.socket?
@@ -455,16 +468,50 @@ module GhosttyAutomation
         response = JSON.parse(stdout.lines.first)
         raise Error, "kill switch did not reject tools/call" unless response.dig("error", "code") == -32_001
         raise Error, "audit leaked MCP arguments" if File.read(audit).include?("must-not-appear")
+
+        FileUtils.rm_f(sentinel)
+        actual = read_mcp_contract(sentinel, audit)
+        expected = JSON.parse(contract_snapshot.read)
+        raise Error, "Peekaboo MCP contract differs from pinned 4.3.2 snapshot" unless actual == expected
       end
       @out.puts("PASS mcp kill switch and audit redaction")
-      @out.puts("PASS mcp 4.3.2 binary identity")
+      @out.puts("PASS mcp initialization and 4.3.2 tools/list contract")
+    end
+
+    def read_mcp_contract(sentinel, audit)
+      command = [
+        @proxy.to_s, "--sentinel", sentinel, "--audit-log", audit,
+        "--", @peekaboo.to_s, "mcp", "--bridge-socket", @socket.to_s, "--allow-foreground",
+      ]
+      Open3.popen3(*command) do |stdin, stdout, _stderr, wait|
+        initialize_request = {
+          jsonrpc: "2.0", id: 1, method: "initialize",
+          params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "ghostty-automation", version: VERSION } },
+        }
+        stdin.puts(JSON.generate(initialize_request))
+        stdin.flush
+        initialized = JSON.parse(Timeout.timeout(30) { stdout.gets || raise(Error, "MCP closed during initialize") })
+        stdin.puts(JSON.generate({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }))
+        stdin.puts(JSON.generate({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }))
+        stdin.flush
+        tools = JSON.parse(Timeout.timeout(30) { stdout.gets || raise(Error, "MCP closed during tools/list") })
+        stdin.close
+        Process.kill("TERM", wait.pid) if wait.alive?
+        init = initialized.fetch("result")
+        {
+          "protocolVersion" => init.fetch("protocolVersion"),
+          "serverInfo" => init.fetch("serverInfo"),
+          "capabilities" => init.fetch("capabilities"),
+          "tools" => tools.fetch("result").fetch("tools"),
+        }
+      end
     end
 
     def test_xctest(only_testing)
       source = @env["GHOSTTY_SOURCE_DIR"]
       raise Error, "set GHOSTTY_SOURCE_DIR to a Ghostty checkout" unless source
       command = ["#{source}/macos/build.nu", "--action", "test", "--include-ui-tests"]
-      only_testing.each { |test_name| command.concat(["--only-testing", test_name]) }
+      command.concat(["--only-testing", only_testing.join(",")]) unless only_testing.empty?
       system(*command) || raise(Error, "Ghostty XCTest lane failed")
     end
 

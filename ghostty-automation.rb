@@ -17,9 +17,9 @@ class GhosttyAutomation < Formula
   end
 
   resource "mcp-contract" do
-    url "https://raw.githubusercontent.com/f5-sales-demo/homebrew-tap/18cf0f55bebfcaa3e4ebfdb5f13ccb1908b787f1/libexec/peekaboo-mcp-contract-4.3.2.json",
+    url "https://raw.githubusercontent.com/f5-sales-demo/homebrew-tap/1bd0bf0d385a8820f63ab5fdf8e8520a6ec19968/libexec/peekaboo-mcp-contract-4.3.2.json",
         using: :nounzip
-    sha256 "b3d32a9aa1c8a30410469a2f93b1cb8c9030381317db9caf383d2caee7ce7f21"
+    sha256 "75471c1b370f8323cfbc098c7599d9f1a5b18910ee53a09cc76dcffd259edd22"
   end
 
   resource "documentation" do

@@ -1,3 +1,6 @@
+# typed: strict
+# frozen_string_literal: true
+
 class Peekaboo < Formula
   desc "Secure macOS UI automation CLI"
   homepage "https://github.com/openclaw/Peekaboo"

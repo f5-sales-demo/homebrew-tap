@@ -4,7 +4,7 @@ cask "peekaboo-app" do
 
   url "https://github.com/openclaw/Peekaboo/releases/download/v#{version}/Peekaboo-#{version}.app.zip"
   name "Peekaboo"
-  desc "Secure macOS UI automation app and permission bridge"
+  desc "Secure UI automation app and permission bridge"
   homepage "https://github.com/openclaw/Peekaboo"
 
   depends_on arch: :arm64

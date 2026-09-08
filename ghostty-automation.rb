@@ -1,3 +1,6 @@
+# typed: strict
+# frozen_string_literal: true
+
 class GhosttyAutomation < Formula
   desc "Guarded Peekaboo MCP setup and acceptance tooling for Ghostty"
   homepage "https://github.com/f5-sales-demo/homebrew-tap/blob/main/docs/ghostty-automation.md"
@@ -7,8 +10,8 @@ class GhosttyAutomation < Formula
   sha256 "27cfa713c530d8b3e5dfe2b4283723c4ef692bcd1fa93eb57d7d5c82aaef985f"
   license "MIT"
 
-  depends_on "peekaboo"
   depends_on :macos
+  depends_on "peekaboo"
 
   resource "peekaboo-mcp-proxy" do
     url "https://raw.githubusercontent.com/f5-sales-demo/homebrew-tap/6d2229448c2fe09b7a35e50e5433ced29b4fa122/libexec/peekaboo-mcp-proxy",
@@ -34,7 +37,7 @@ class GhosttyAutomation < Formula
       libexec.install "peekaboo-mcp-proxy"
     end
     resource("mcp-contract").stage do
-      (share/"ghostty-automation").install "peekaboo-mcp-contract-4.3.2.json"
+      pkgshare.install "peekaboo-mcp-contract-4.3.2.json"
     end
     resource("documentation").stage do
       doc.install "ghostty-automation.md"

@@ -105,7 +105,15 @@ module PeekabooMCPProxy
         record_child
         install_signal_handlers
         drain_stderr = Thread.new { child_err.read }
-        relay
+        begin
+          relay
+        ensure
+          begin
+            Process.kill("TERM", wait.pid) if process_alive?(wait.pid)
+          rescue Errno::ESRCH
+            nil
+          end
+        end
         drain_stderr.join(1)
         wait.value
       ensure
@@ -117,8 +125,9 @@ module PeekabooMCPProxy
 
     def validate!
       raise Error, "missing child command after --" if @child_argv.empty?
-      executable = Pathname(@child_argv.first).expand_path
+      executable = Pathname(@child_argv.first)
       raise Error, "child executable must be an absolute path" unless executable.absolute?
+      executable = executable.expand_path
       raise Error, "child executable is not executable" unless executable.executable?
       @executable_path = Pathname(File.realpath(executable)).to_s
       @executable_hash = Digest::SHA256.file(@executable_path).hexdigest
@@ -137,33 +146,45 @@ module PeekabooMCPProxy
 
     def relay
       inputs = [$stdin, @child_out]
+      buffers = inputs.to_h { |io| [io, +""] }
       until inputs.empty?
         ready = IO.select(inputs, nil, nil, 0.25)&.first || []
         break unless process_alive?(@wait.pid) || !ready.empty?
 
-        ready.each do |io|
-          if io == $stdin
-            line = $stdin.gets
-            if line
-              handle_request(line)
-            else
-              inputs.delete($stdin)
-              @child_in.close unless @child_in.closed?
-            end
-          else
-            line = @child_out.gets
-            if line
-              handle_response(line)
-            else
-              inputs.delete(@child_out)
-            end
-          end
-        end
+        ready.each { |io| drain_ready(io, inputs, buffers) }
       end
+    end
+
+    def drain_ready(io, inputs, buffers)
+      chunk = io.read_nonblock(16_384, exception: false)
+      return if chunk == :wait_readable
+
+      if chunk.nil?
+        handle_line(io, buffers.fetch(io)) unless buffers.fetch(io).empty?
+        buffers.delete(io)
+        inputs.delete(io)
+        @child_in.close if io == $stdin && !@child_in.closed?
+        return
+      end
+
+      buffer = buffers.fetch(io)
+      buffer << chunk
+      while (newline = buffer.index("\n"))
+        handle_line(io, buffer.slice!(0..newline))
+      end
+    end
+
+    def handle_line(io, line)
+      io == $stdin ? handle_request(line) : handle_response(line)
     end
 
     def handle_request(line)
       message = JSON.parse(line)
+      unless message.is_a?(Hash)
+        @child_in.write(line)
+        @child_in.flush
+        return
+      end
       unless message["method"] == "tools/call"
         @child_in.write(line)
         @child_in.flush
@@ -193,6 +214,11 @@ module PeekabooMCPProxy
 
     def handle_response(line)
       message = JSON.parse(line)
+      unless message.is_a?(Hash)
+        $stdout.write(line)
+        $stdout.flush
+        return
+      end
       pending = @pending.delete(message["id"])
       if pending
         started = pending.delete("started")

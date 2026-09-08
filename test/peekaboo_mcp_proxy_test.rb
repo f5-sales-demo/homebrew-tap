@@ -81,6 +81,19 @@ class PeekabooMCPProxyTest < Minitest::Test
     assert_equal "tool_error", record["error_code"]
   end
 
+  def test_pipelined_requests_are_relayed_without_stalling
+    initialize_request = JSON.generate(jsonrpc: "2.0", id: 1, method: "initialize", params: {})
+    input = initialize_request + "\n" + call_request(44, secret: "pipelined-command")
+
+    stdout, stderr, status = invoke(input)
+
+    assert status.success?, stderr
+    responses = stdout.lines.map { |line| JSON.parse(line) }
+    assert_equal [1, 44], responses.map { |response| response["id"] }
+    assert_includes File.read(@received), "pipelined-command"
+    refute_includes File.read(@audit), "pipelined-command"
+  end
+
   private
 
   def call_request(id, secret:)

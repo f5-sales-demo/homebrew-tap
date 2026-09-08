@@ -432,8 +432,12 @@ module GhosttyAutomation
       record = JSON.parse(@state.read)
       pid = Integer(record.fetch("pid"))
       return FileUtils.rm_f(@state) unless process_alive?(pid)
-      raise Error, "refusing to terminate PID #{pid}: process generation changed" unless process_start(pid) == record["start_time"]
-      raise Error, "refusing to terminate PID #{pid}: executable changed" unless process_executable(pid) == record["executable_path"]
+      start_time = process_start(pid)
+      return FileUtils.rm_f(@state) unless start_time
+      raise Error, "refusing to terminate PID #{pid}: process generation changed" unless start_time == record["start_time"]
+      executable = process_executable(pid)
+      return FileUtils.rm_f(@state) unless executable
+      raise Error, "refusing to terminate PID #{pid}: executable changed" unless executable == record["executable_path"]
       unless Digest::SHA256.file(record["executable_path"]).hexdigest == record["sha256"]
         raise Error, "refusing to terminate PID #{pid}: executable hash changed"
       end
@@ -454,16 +458,21 @@ module GhosttyAutomation
     end
 
     def process_start(pid)
-      @runner.run({ "LC_ALL" => "C" }, "/bin/ps", "-o", "lstart=", "-p", pid.to_s).stdout.strip
+      result = @runner.run({ "LC_ALL" => "C" }, "/bin/ps", "-o", "lstart=", "-p", pid.to_s, allow_failure: true)
+      value = result.stdout.strip
+      result.status.success? && !value.empty? ? value : nil
     end
 
     def process_executable(pid)
       return File.realpath("/proc/#{pid}/exe") if File.exist?("/proc/#{pid}/exe")
 
-      result = @runner.run("/usr/sbin/lsof", "-a", "-p", pid.to_s, "-d", "txt", "-Fn")
-      path = result.stdout.lines.find { |line| line.start_with?("n/") }
-      raise Error, "cannot resolve executable for PID #{pid}" unless path
-      File.realpath(path.delete_prefix("n").strip)
+      result = @runner.run({ "LC_ALL" => "C" }, "/bin/ps", "-o", "comm=", "-p", pid.to_s, allow_failure: true)
+      path = result.stdout.strip
+      return nil unless result.status.success? && path.start_with?("/")
+
+      File.realpath(path)
+    rescue Errno::ENOENT
+      nil
     end
 
     def test_mcp

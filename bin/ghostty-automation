@@ -377,7 +377,7 @@ module GhosttyAutomation
         raise Error, "expected Homebrew peekaboo #{PEEKABOO_VERSION}" unless installed.last == PEEKABOO_VERSION
       end
       checks["cask_version"] = check do
-        installed = @runner.run(@brew, "list", "--cask", "--versions", "f5-sales-demo/tap/peekaboo-app").stdout.split
+        installed = @runner.run(@brew, "list", "--cask", "--versions", "peekaboo-app").stdout.split
         raise Error, "expected Homebrew peekaboo-app #{PEEKABOO_VERSION}" unless installed.last == PEEKABOO_VERSION
       end
       checks["cli_version"] = check { verify_version! }

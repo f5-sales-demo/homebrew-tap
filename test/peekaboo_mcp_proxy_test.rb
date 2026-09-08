@@ -21,7 +21,9 @@ class PeekabooMCPProxyTest < Minitest::Test
       while (line = STDIN.gets)
         File.open(received, "a") { |file| file.write(line) }
         request = JSON.parse(line)
-        response = if request["method"] == "tools/call"
+        response = if request.dig("params", "name") == "failing_click"
+          {jsonrpc: "2.0", id: request["id"], result: {content: [{type: "text", text: "secret-error"}], isError: true}}
+        elsif request["method"] == "tools/call"
           {jsonrpc: "2.0", id: request["id"], result: {content: [{type: "text", text: "secret-result"}]}}
         else
           {jsonrpc: "2.0", id: request["id"], result: {}}
@@ -61,6 +63,22 @@ class PeekabooMCPProxyTest < Minitest::Test
     assert_equal 123, record["pid"]
     assert_equal 456, record["window_id"]
     assert_equal "success", record["outcome"]
+  end
+
+  def test_tool_error_result_is_audited_without_leaking_content
+    request = JSON.parse(call_request(43, secret: "private-error-context"))
+    request["params"]["name"] = "failing_click"
+
+    stdout, stderr, status = invoke(JSON.generate(request) + "\n")
+
+    assert status.success?, stderr
+    assert_equal true, JSON.parse(stdout).dig("result", "isError")
+    audit = File.read(@audit)
+    refute_includes audit, "private-error-context"
+    refute_includes audit, "secret-error"
+    record = JSON.parse(audit)
+    assert_equal "error", record["outcome"]
+    assert_equal "tool_error", record["error_code"]
   end
 
   private

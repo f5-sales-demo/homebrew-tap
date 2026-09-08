@@ -198,10 +198,11 @@ module PeekabooMCPProxy
         started = pending.delete("started")
         duration = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
         error = message["error"]
+        tool_error = message.dig("result", "isError") == true
         @audit.write(pending.merge(
           "duration_ms" => duration,
-          "outcome" => error ? "error" : "success",
-          "error_code" => error.is_a?(Hash) ? error["code"] : nil,
+          "outcome" => error || tool_error ? "error" : "success",
+          "error_code" => error.is_a?(Hash) ? error["code"] : ("tool_error" if tool_error),
           "permissions" => @audit.response_permissions(message) || pending["permissions"],
         ))
       end

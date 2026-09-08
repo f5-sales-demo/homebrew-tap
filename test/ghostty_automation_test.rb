@@ -89,3 +89,15 @@ class GhosttyAutomationProcessTest < Minitest::Test
     FileUtils.remove_entry_secure(directory) if directory && File.exist?(directory)
   end
 end
+
+class GhosttyAutomationContractTest < Minitest::Test
+  def test_contract_tool_order_is_canonicalized
+    cli = GhosttyAutomation::CLI.new
+    contract = { "tools" => [{ "name" => "window" }, { "name" => "click" }] }
+
+    result = cli.send(:canonical_contract, contract)
+
+    assert_equal %w[click window], result.fetch("tools").map { |tool| tool.fetch("name") }
+    assert_equal %w[window click], contract.fetch("tools").map { |tool| tool.fetch("name") }
+  end
+end

@@ -491,8 +491,8 @@ module GhosttyAutomation
         raise Error, "audit leaked MCP arguments" if File.read(audit).include?("must-not-appear")
 
         FileUtils.rm_f(sentinel)
-        actual = read_mcp_contract(sentinel, audit)
-        expected = JSON.parse(contract_snapshot.read)
+        actual = canonical_contract(read_mcp_contract(sentinel, audit))
+        expected = canonical_contract(JSON.parse(contract_snapshot.read))
         raise Error, "Peekaboo MCP contract differs from pinned 4.3.2 snapshot" unless actual == expected
       end
       @out.puts("PASS mcp kill switch and audit redaction")
@@ -532,6 +532,10 @@ module GhosttyAutomation
           "tools" => tools.fetch("result").fetch("tools"),
         }
       end
+    end
+
+    def canonical_contract(contract)
+      contract.merge("tools" => Array(contract["tools"]).sort_by { |tool| tool.fetch("name") })
     end
 
     def test_xctest(only_testing)

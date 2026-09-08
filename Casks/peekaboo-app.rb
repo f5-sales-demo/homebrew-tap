@@ -7,6 +7,10 @@ cask "peekaboo-app" do
   desc "Secure UI automation app and permission bridge"
   homepage "https://github.com/openclaw/Peekaboo"
 
+  livecheck do
+    skip "Pinned for managed Ghostty automation; upgrades require recertification"
+  end
+
   depends_on arch: :arm64
   depends_on macos: :sequoia
 

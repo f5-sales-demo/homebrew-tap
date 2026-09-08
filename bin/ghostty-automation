@@ -11,7 +11,7 @@ require "tempfile"
 require "timeout"
 
 module GhosttyAutomation
-  VERSION = "1.0.2"
+  VERSION = "1.0.3"
   PEEKABOO_VERSION = "4.3.2"
   TEAM_ID = "FWJYW4S8P8"
   APP_ID = "boo.peekaboo.mac"
@@ -554,8 +554,9 @@ module GhosttyAutomation
     def test_xctest(only_testing)
       source = @env["GHOSTTY_SOURCE_DIR"]
       raise Error, "set GHOSTTY_SOURCE_DIR to a Ghostty checkout" unless source
+      only_testing = ["GhosttyUITests/GhosttyTerminalProtocolTests"] if only_testing.empty?
       command = ["#{source}/macos/build.nu", "--action", "test", "--include-ui-tests"]
-      command.concat(["--only-testing", only_testing.join(",")]) unless only_testing.empty?
+      command.concat(["--only-testing", only_testing.join(",")])
       system(*command) || raise(Error, "Ghostty XCTest lane failed")
     end
 

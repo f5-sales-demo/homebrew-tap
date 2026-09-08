@@ -102,3 +102,33 @@ class GhosttyAutomationContractTest < Minitest::Test
     assert_equal %w[window click], contract.fetch("tools").map { |tool| tool.fetch("name") }
   end
 end
+
+class GhosttyAutomationXCTestTest < Minitest::Test
+  def setup
+    @cli = GhosttyAutomation::CLI.new(env: {
+      "GHOSTTY_SOURCE_DIR" => "/tmp/ghostty",
+      "GHOSTTY_AUTOMATION_HOME" => "/tmp/ghostty-automation-test",
+    })
+  end
+
+  def test_xctest_defaults_to_terminal_protocol_suite
+    command = nil
+    @cli.stub(:system, proc { |*argv| command = argv; true }) do
+      @cli.send(:test_xctest, [])
+    end
+
+    assert_equal [
+      "/tmp/ghostty/macos/build.nu", "--action", "test", "--include-ui-tests",
+      "--only-testing", "GhosttyUITests/GhosttyTerminalProtocolTests",
+    ], command
+  end
+
+  def test_xctest_preserves_explicit_selection
+    command = nil
+    @cli.stub(:system, proc { |*argv| command = argv; true }) do
+      @cli.send(:test_xctest, ["GhosttyUITests/One", "GhosttyUITests/Two"])
+    end
+
+    assert_equal "GhosttyUITests/One,GhosttyUITests/Two", command.last
+  end
+end

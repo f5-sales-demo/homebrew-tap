@@ -48,6 +48,11 @@ ghostty-automation uninstall
 ghostty-automation uninstall --purge --revoke-tcc
 ```
 
+The XCTest lane defaults to the dedicated
+`GhosttyUITests/GhosttyTerminalProtocolTests` suite so unrelated upstream UI
+tests cannot contaminate the automation result. Use `--only-testing` only when
+intentionally selecting another XCTest identifier.
+
 `disable` creates the sentinel before changing the Codex entry. The proxy
 rejects every `tools/call` while that sentinel exists. It terminates a recorded
 child only after its PID, process start time, executable path, and SHA-256 still

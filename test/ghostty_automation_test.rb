@@ -68,3 +68,24 @@ class GhosttyAutomationConfigTest < Minitest::Test
     assert_equal original, File.binread(@path)
   end
 end
+
+class GhosttyAutomationProcessTest < Minitest::Test
+  def test_executable_identity_follows_a_symlinked_launch
+    directory = Dir.mktmpdir("ghostty-automation-process")
+    executable = File.join(directory, "peekaboo")
+    File.symlink("/bin/sleep", executable)
+    pid = Process.spawn(executable, "10")
+    cli = GhosttyAutomation::CLI.new
+
+    assert_equal true, cli.send(:process_executable_matches?, pid, File.realpath(executable))
+    assert_equal false, cli.send(:process_executable_matches?, pid, "/usr/bin/false")
+  ensure
+    begin
+      Process.kill("TERM", pid) if pid
+      Process.wait(pid) if pid
+    rescue Errno::ESRCH, Errno::ECHILD
+      nil
+    end
+    FileUtils.remove_entry_secure(directory) if directory && File.exist?(directory)
+  end
+end

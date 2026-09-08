@@ -435,9 +435,9 @@ module GhosttyAutomation
       start_time = process_start(pid)
       return FileUtils.rm_f(@state) unless start_time
       raise Error, "refusing to terminate PID #{pid}: process generation changed" unless start_time == record["start_time"]
-      executable = process_executable(pid)
-      return FileUtils.rm_f(@state) unless executable
-      raise Error, "refusing to terminate PID #{pid}: executable changed" unless executable == record["executable_path"]
+      executable_match = process_executable_matches?(pid, record["executable_path"])
+      return FileUtils.rm_f(@state) if executable_match.nil?
+      raise Error, "refusing to terminate PID #{pid}: executable changed" unless executable_match
       unless Digest::SHA256.file(record["executable_path"]).hexdigest == record["sha256"]
         raise Error, "refusing to terminate PID #{pid}: executable hash changed"
       end
@@ -463,16 +463,19 @@ module GhosttyAutomation
       result.status.success? && !value.empty? ? value : nil
     end
 
-    def process_executable(pid)
-      return File.realpath("/proc/#{pid}/exe") if File.exist?("/proc/#{pid}/exe")
+    def process_executable_matches?(pid, expected)
+      proc_path = "/proc/#{pid}/exe"
+      return File.realpath(proc_path) == expected if File.exist?(proc_path)
 
-      result = @runner.run({ "LC_ALL" => "C" }, "/bin/ps", "-o", "comm=", "-p", pid.to_s, allow_failure: true)
-      path = result.stdout.strip
-      return nil unless result.status.success? && path.start_with?("/")
+      result = @runner.run("/usr/sbin/lsof", "-a", "-p", pid.to_s, "-d", "txt", "-Fn", allow_failure: true)
+      return nil unless result.status.success?
 
-      File.realpath(path)
-    rescue Errno::ENOENT
-      nil
+      paths = result.stdout.lines.select { |line| line.start_with?("n/") }.map do |line|
+        File.realpath(line.delete_prefix("n").strip)
+      rescue Errno::ENOENT
+        nil
+      end.compact
+      paths.include?(expected)
     end
 
     def test_mcp

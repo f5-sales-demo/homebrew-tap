@@ -8,7 +8,7 @@ cask "peekaboo-app" do
   homepage "https://github.com/openclaw/Peekaboo"
 
   depends_on arch: :arm64
-  depends_on macos: ">= :sequoia"
+  depends_on macos: :sequoia
 
   app "Peekaboo.app"
 

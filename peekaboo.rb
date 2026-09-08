@@ -5,7 +5,6 @@ class Peekaboo < Formula
   desc "Secure macOS UI automation CLI"
   homepage "https://github.com/openclaw/Peekaboo"
   url "https://github.com/openclaw/Peekaboo/releases/download/v4.3.2/peekaboo-macos-universal.tar.gz"
-  version "4.3.2"
   sha256 "a7f706a1847e9e8513fd6f2f0a8f02cbdafe8f07d2a2ca028f2213b06f185e08"
   license "MIT"
 

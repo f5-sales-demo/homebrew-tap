@@ -1,0 +1,510 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "digest"
+require "fileutils"
+require "json"
+require "open3"
+require "optparse"
+require "pathname"
+require "tempfile"
+
+module GhosttyAutomation
+  VERSION = "1.0.0"
+  PEEKABOO_VERSION = "4.3.2"
+  TEAM_ID = "FWJYW4S8P8"
+  APP_ID = "boo.peekaboo.mac"
+  CLI_ID = "boo.peekaboo.peekaboo"
+  START_MARKER = "# >>> ghostty-automation managed peekaboo >>>"
+  END_MARKER = "# <<< ghostty-automation managed peekaboo <<<"
+
+  class Error < StandardError; end
+
+  class Runner
+    Result = Struct.new(:stdout, :stderr, :status, keyword_init: true)
+
+    def run(*argv, allow_failure: false)
+      stdout, stderr, status = Open3.capture3(*argv)
+      return Result.new(stdout: stdout, stderr: stderr, status: status) if status.success? || allow_failure
+
+      detail = stderr.lines.first&.strip || stdout.lines.first&.strip || "exit #{status.exitstatus}"
+      raise Error, "#{argv.first} failed: #{detail}"
+    end
+  end
+
+  class Config
+    attr_reader :path
+
+    def initialize(path, values)
+      @path = Pathname(path)
+      @values = values
+    end
+
+    def write(enabled:)
+      existing = path.exist? ? path.binread : ""
+      updated = replace(existing, enabled: enabled)
+      return false if updated == existing
+
+      FileUtils.mkdir_p(path.dirname, mode: 0o700)
+      atomic_write(updated)
+      true
+    end
+
+    def remove
+      return false unless path.exist?
+
+      existing = path.binread
+      updated = without_managed_block(existing)
+      return false if updated == existing
+
+      atomic_write(updated)
+      true
+    end
+
+    def managed?(enabled: nil)
+      return false unless path.exist?
+
+      block = managed_block(path.binread)
+      return false unless block
+      enabled.nil? || block.match?(/^enabled = #{enabled}$/)
+    end
+
+    private
+
+    def replace(existing, enabled:)
+      stripped = without_managed_block(existing)
+      reject_unmanaged_entry!(stripped)
+      prior_final_newline = stripped.empty? || stripped.end_with?("\n")
+      prefix = prior_final_newline ? stripped : stripped + "\n"
+      prefix + rendered_block(enabled: enabled, prior_final_newline: prior_final_newline)
+    end
+
+    def without_managed_block(content)
+      starts = content.enum_for(:scan, /^#{Regexp.escape(START_MARKER)}\n/).map { Regexp.last_match.begin(0) }
+      ends = content.enum_for(:scan, /^#{Regexp.escape(END_MARKER)}(?:\n|\z)/).map { Regexp.last_match.end(0) }
+      return content if starts.empty? && ends.empty?
+      unless starts.length == 1 && ends.length == 1 && starts.first < ends.first
+        raise Error, "Codex config contains malformed GhosttyAutomation markers"
+      end
+
+      managed = content[starts.first...ends.first]
+      prefix = content[0...starts.first]
+      if managed.include?("# prior-final-newline = false") && prefix.end_with?("\n")
+        prefix = prefix[0...-1]
+      end
+      prefix + content[ends.first..]
+    end
+
+    def managed_block(content)
+      match = content.match(/^#{Regexp.escape(START_MARKER)}\n(.*?)^#{Regexp.escape(END_MARKER)}(?:\n|\z)/m)
+      match && match[1]
+    end
+
+    def reject_unmanaged_entry!(content)
+      return unless content.match?(/^\s*\[mcp_servers\.peekaboo\]\s*(?:#.*)?$/)
+
+      raise Error, "refusing to overwrite unmanaged [mcp_servers.peekaboo] entry"
+    end
+
+    def rendered_block(enabled:, prior_final_newline:)
+      <<~TOML
+        #{START_MARKER}
+        # prior-final-newline = #{prior_final_newline}
+        [mcp_servers.peekaboo]
+        command = #{JSON.generate(@values.fetch(:proxy))}
+        args = [
+          "--sentinel", #{JSON.generate(@values.fetch(:sentinel))},
+          "--audit-log", #{JSON.generate(@values.fetch(:audit_log))},
+          "--",
+          #{JSON.generate(@values.fetch(:peekaboo))}, "mcp",
+          "--bridge-socket", #{JSON.generate(@values.fetch(:socket))},
+          "--allow-foreground"
+        ]
+        enabled = #{enabled}
+        startup_timeout_sec = 30
+        tool_timeout_sec = 120
+        default_tools_approval_mode = "approve"
+        #{END_MARKER}
+      TOML
+    end
+
+    def atomic_write(content)
+      mode = path.exist? ? path.stat.mode & 0o777 : 0o600
+      Tempfile.create([path.basename.to_s, ".tmp"], path.dirname.to_s) do |file|
+        file.binmode
+        file.write(content)
+        file.flush
+        file.fsync
+        File.chmod(mode, file.path)
+        File.rename(file.path, path)
+      end
+    end
+  end
+
+  class CLI
+    def initialize(env: ENV, runner: Runner.new, out: $stdout, input: $stdin)
+      @env, @runner, @out, @input = env, runner, out, input
+      @home = Pathname(env.fetch("GHOSTTY_AUTOMATION_HOME", Dir.home)).expand_path
+      @support = @home/"Library/Application Support/GhosttyAutomation"
+      @log_dir = @home/"Library/Logs/GhosttyAutomation"
+      @socket = @home/"Library/Application Support/Peekaboo/bridge.sock"
+      @sentinel = @support/"DISABLED"
+      @state = @support/"run/peekaboo-mcp-child.json"
+      @proxy = @support/"bin/peekaboo-mcp-proxy"
+      @config_path = Pathname(env.fetch("GHOSTTY_AUTOMATION_CODEX_CONFIG", (@home/".codex/config.toml").to_s))
+      @brew = env.fetch("GHOSTTY_AUTOMATION_BREW", "/opt/homebrew/bin/brew")
+      @peekaboo = Pathname(env.fetch("GHOSTTY_AUTOMATION_PEEKABOO", "/opt/homebrew/bin/peekaboo"))
+      @app = Pathname(env.fetch("GHOSTTY_AUTOMATION_APP", "/Applications/Peekaboo.app"))
+    end
+
+    def run(argv)
+      command = argv.shift
+      return @out.puts("ghostty-automation #{VERSION}") if %w[--version version].include?(command)
+
+      public_send(command.tr("-", "_"), argv) if %w[setup doctor enable disable test uninstall].include?(command)
+      raise Error, usage unless %w[setup doctor enable disable test uninstall].include?(command)
+    end
+
+    def setup(argv)
+      parse_empty!(argv)
+      require_macos_arm!
+      @runner.run(@brew, "install", "f5-sales-demo/tap/peekaboo")
+      @runner.run(@brew, "install", "--cask", "f5-sales-demo/tap/peekaboo-app")
+      verify_installation!
+      install_proxy
+      config.write(enabled: true)
+      FileUtils.rm_f(@sentinel)
+      @runner.run("/usr/bin/open", "-a", @app.to_s, "--args", "--interactive")
+      wait_for_socket
+      request_permissions
+      if @input.tty? && !permissions_granted?
+        @out.puts("Approve Screen Recording, Accessibility, and Event Synthesizing for Peekaboo.app in System Settings.")
+        @out.print("Press Return after approval: ")
+        @input.gets
+      end
+      finish_doctor
+    end
+
+    def doctor(argv)
+      json = false
+      OptionParser.new { |opts| opts.on("--json") { json = true } }.parse!(argv)
+      raise Error, "doctor does not accept positional arguments" unless argv.empty?
+      report = doctor_report
+      json ? @out.puts(JSON.pretty_generate(report)) : print_report(report)
+      raise Error, "doctor found failed checks" unless report["ok"]
+    end
+
+    def enable(argv)
+      parse_empty!(argv)
+      verify_installation!
+      install_proxy
+      config.write(enabled: true)
+      FileUtils.rm_f(@sentinel)
+      @out.puts("Peekaboo MCP enabled; restart Codex to load the managed entry.")
+    end
+
+    def disable(argv)
+      parse_empty!(argv)
+      FileUtils.mkdir_p(@support, mode: 0o700)
+      atomic_text(@sentinel, "disabled\n", mode: 0o600)
+      config.write(enabled: false) if config.managed?
+      terminate_recorded_child
+      @out.puts("Peekaboo MCP disabled; restart Codex to unload the managed entry.")
+    end
+
+    def test(argv)
+      lane = "all"
+      only_testing = []
+      OptionParser.new do |opts|
+        opts.on("--lane LANE", %w[xctest mcp all]) { |value| lane = value }
+        opts.on("--only-testing TEST") { |value| only_testing << value }
+      end.parse!(argv)
+      raise Error, "test does not accept positional arguments" unless argv.empty?
+      test_mcp if %w[mcp all].include?(lane)
+      test_xctest(only_testing) if %w[xctest all].include?(lane)
+    end
+
+    def uninstall(argv)
+      purge = false
+      revoke = false
+      OptionParser.new do |opts|
+        opts.on("--purge") { purge = true }
+        opts.on("--revoke-tcc") { revoke = true }
+      end.parse!(argv)
+      raise Error, "uninstall does not accept positional arguments" unless argv.empty?
+
+      disable([])
+      config.remove
+      [@proxy, @state, @sentinel].each { |path| FileUtils.rm_f(path) }
+      FileUtils.rm_f(@log_dir/"audit.jsonl") if purge
+      revoke_tcc if revoke
+      uninstall_package("--cask", "f5-sales-demo/tap/peekaboo-app")
+      uninstall_package("--formula", "f5-sales-demo/tap/peekaboo")
+      remove_empty_owned_directories
+      @out.puts("Removed GhosttyAutomation-owned configuration and Peekaboo packages.")
+    end
+
+    private
+
+    def parse_empty!(argv)
+      OptionParser.new.parse!(argv)
+      raise Error, "unexpected positional arguments" unless argv.empty?
+    end
+
+    def config
+      @config ||= Config.new(@config_path, {
+        proxy: @proxy.to_s,
+        sentinel: @sentinel.to_s,
+        audit_log: (@log_dir/"audit.jsonl").to_s,
+        peekaboo: @peekaboo.to_s,
+        socket: @socket.to_s,
+      })
+    end
+
+    def require_macos_arm!
+      raise Error, "Ghostty automation requires macOS" unless @runner.run("uname", "-s").stdout.strip == "Darwin"
+      raise Error, "Ghostty automation requires Apple Silicon" unless @runner.run("uname", "-m").stdout.strip == "arm64"
+      raise Error, "Homebrew is required at #{@brew}" unless File.executable?(@brew)
+    end
+
+    def uninstall_package(kind, name)
+      check = @runner.run(@brew, "list", kind, name, allow_failure: true)
+      @runner.run(@brew, "uninstall", kind, name) if check.status.success?
+    end
+
+    def install_proxy
+      source = source_proxy
+      raise Error, "managed MCP proxy not found at #{source}" unless source.file?
+      FileUtils.mkdir_p(@proxy.dirname, mode: 0o700)
+      bytes = source.binread
+      atomic_text(@proxy, bytes, mode: 0o755) if !@proxy.exist? || @proxy.binread != bytes
+      FileUtils.mkdir_p(@log_dir, mode: 0o700)
+    end
+
+    def source_proxy
+      override = @env["GHOSTTY_AUTOMATION_PROXY_SOURCE"]
+      return Pathname(override).expand_path if override
+
+      executable = Pathname(File.realpath($PROGRAM_NAME))
+      candidates = [
+        executable.dirname.parent/"libexec/peekaboo-mcp-proxy",
+        executable.dirname.parent/"libexec/GhosttyAutomation/peekaboo-mcp-proxy",
+      ]
+      candidates.find(&:file?) || candidates.first
+    end
+
+    def wait_for_socket(timeout: 30)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      until @socket.socket?
+        raise Error, "Peekaboo Bridge socket did not appear at #{@socket}" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+        sleep 0.25
+      end
+    end
+
+    def request_permissions
+      %w[screen-recording accessibility event-synthesizing].each do |permission|
+        @runner.run(@peekaboo.to_s, "permissions", "request", permission, "--bridge-socket", @socket.to_s, allow_failure: true)
+      end
+    end
+
+    def verify_installation!
+      verify_version!
+      verify_code_identity!(@peekaboo, CLI_ID)
+      verify_code_identity!(@app, APP_ID)
+      @runner.run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--verbose=2", @app.to_s)
+      @runner.run("/usr/sbin/spctl", "--assess", "--type", "execute", "--verbose=4", @app.to_s)
+      @runner.run("/usr/bin/xcrun", "stapler", "validate", @app.to_s)
+    end
+
+    def verify_version!
+      output = @runner.run(@peekaboo.to_s, "--version").stdout
+      raise Error, "unexpected Peekaboo CLI version" unless output.match?(/\APeekaboo #{Regexp.escape(PEEKABOO_VERSION)}\b/)
+      plist = @app/"Contents/Info.plist"
+      app_version = @runner.run("/usr/libexec/PlistBuddy", "-c", "Print :CFBundleShortVersionString", plist.to_s).stdout.strip
+      raise Error, "unexpected Peekaboo.app version #{app_version}" unless app_version == PEEKABOO_VERSION
+    end
+
+    def verify_code_identity!(path, expected_id)
+      result = @runner.run("/usr/bin/codesign", "-dv", "--verbose=4", path.to_s)
+      details = result.stderr
+      raise Error, "unexpected identifier for #{path}" unless details.match?(/^Identifier=#{Regexp.escape(expected_id)}$/)
+      raise Error, "unexpected Team ID for #{path}" unless details.match?(/^TeamIdentifier=#{TEAM_ID}$/)
+      @runner.run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--verbose=2", path.to_s)
+    end
+
+    def json_command(*argv)
+      result = @runner.run(*argv, allow_failure: true)
+      [result.status.success?, JSON.parse(result.stdout)]
+    rescue JSON::ParserError
+      [false, {}]
+    end
+
+    def bridge_status
+      ok, value = json_command(@peekaboo.to_s, "bridge", "status", "--bridge-socket", @socket.to_s, "--json")
+      [ok && value["success"] == true, value]
+    end
+
+    def permission_status
+      ok, value = json_command(@peekaboo.to_s, "permissions", "status", "--bridge-socket", @socket.to_s, "--json")
+      permissions = Array(value.dig("data", "permissions"))
+      values = permissions.to_h { |entry| [entry["name"].to_s.downcase.tr(" ", "_"), entry["isGranted"] == true] }
+      [ok && value["success"] == true, values]
+    end
+
+    def permissions_granted?
+      ok, values = permission_status
+      ok && %w[screen_recording accessibility event_synthesizing].all? { |key| values[key] }
+    end
+
+    def doctor_report
+      checks = {}
+      checks["cli_version"] = check { verify_version! }
+      checks["cli_identity"] = check { verify_code_identity!(@peekaboo, CLI_ID) }
+      checks["app_identity"] = check { verify_code_identity!(@app, APP_ID) }
+      checks["gatekeeper"] = check { @runner.run("/usr/sbin/spctl", "--assess", "--type", "execute", "--verbose=4", @app.to_s) }
+      checks["notarization_staple"] = check { @runner.run("/usr/bin/xcrun", "stapler", "validate", @app.to_s) }
+      checks["gui_session"] = check do
+        owner = @runner.run("/usr/bin/stat", "-f", "%Su", "/dev/console").stdout.strip
+        raise Error, "console is owned by #{owner}" unless owner == @home.basename.to_s
+      end
+      checks["bridge_socket"] = check do
+        raise Error, "missing socket #{@socket}" unless @socket.socket?
+        ok, payload = bridge_status
+        raise Error, payload.dig("error", "code") || "bridge authentication failed" unless ok
+        raise Error, "bridge did not identify #{APP_ID}" unless JSON.generate(payload).include?(APP_ID)
+      end
+      checks["permissions"] = check do
+        ok, values = permission_status
+        raise Error, "permission query failed" unless ok
+        missing = %w[screen_recording accessibility event_synthesizing].reject { |key| values[key] }
+        raise Error, "missing #{missing.join(', ')}" unless missing.empty?
+      end
+      checks["codex_config"] = check { raise Error, "managed entry is not enabled" unless config.managed?(enabled: true) }
+      checks["kill_switch"] = { "ok" => !@sentinel.exist?, "detail" => @sentinel.exist? ? "disabled" : "enabled" }
+      { "ok" => checks.values.all? { |entry| entry["ok"] }, "version" => VERSION, "checks" => checks }
+    end
+
+    def check
+      yield
+      { "ok" => true }
+    rescue StandardError => e
+      { "ok" => false, "detail" => e.message.lines.first.to_s.strip }
+    end
+
+    def print_report(report)
+      report.fetch("checks").each do |name, result|
+        detail = result["detail"] ? ": #{result['detail']}" : ""
+        @out.puts("#{result['ok'] ? 'PASS' : 'FAIL'} #{name}#{detail}")
+      end
+    end
+
+    def finish_doctor
+      report = doctor_report
+      print_report(report)
+      raise Error, "setup incomplete; grant all three Peekaboo permissions and rerun doctor" unless report["ok"]
+    end
+
+    def terminate_recorded_child
+      return unless @state.file?
+
+      record = JSON.parse(@state.read)
+      pid = Integer(record.fetch("pid"))
+      return FileUtils.rm_f(@state) unless process_alive?(pid)
+      raise Error, "refusing to terminate PID #{pid}: process generation changed" unless process_start(pid) == record["start_time"]
+      raise Error, "refusing to terminate PID #{pid}: executable changed" unless process_executable(pid) == record["executable_path"]
+      unless Digest::SHA256.file(record["executable_path"]).hexdigest == record["sha256"]
+        raise Error, "refusing to terminate PID #{pid}: executable hash changed"
+      end
+
+      Process.kill("TERM", pid)
+      FileUtils.rm_f(@state)
+    rescue Errno::ESRCH
+      FileUtils.rm_f(@state)
+    rescue JSON::ParserError, KeyError, ArgumentError => e
+      raise Error, "refusing malformed child record: #{e.message}"
+    end
+
+    def process_alive?(pid)
+      Process.kill(0, pid)
+      true
+    rescue Errno::ESRCH
+      false
+    end
+
+    def process_start(pid)
+      @runner.run({ "LC_ALL" => "C" }, "/bin/ps", "-o", "lstart=", "-p", pid.to_s).stdout.strip
+    end
+
+    def process_executable(pid)
+      return File.realpath("/proc/#{pid}/exe") if File.exist?("/proc/#{pid}/exe")
+
+      result = @runner.run("/usr/sbin/lsof", "-a", "-p", pid.to_s, "-d", "txt", "-Fn")
+      path = result.stdout.lines.find { |line| line.start_with?("n/") }
+      raise Error, "cannot resolve executable for PID #{pid}" unless path
+      File.realpath(path.delete_prefix("n").strip)
+    end
+
+    def test_mcp
+      require "tmpdir"
+      Dir.mktmpdir("ghostty-automation-test") do |dir|
+        sentinel = File.join(dir, "DISABLED")
+        audit = File.join(dir, "audit.jsonl")
+        File.write(sentinel, "disabled\n", mode: "wb", perm: 0o600)
+        request = { jsonrpc: "2.0", id: 91, method: "tools/call", params: { name: "click", arguments: { text: "must-not-appear" } } }
+        stdout, = Open3.capture3(@proxy.to_s, "--sentinel", sentinel, "--audit-log", audit, "--", @peekaboo.to_s, "mcp", stdin_data: JSON.generate(request) + "\n")
+        response = JSON.parse(stdout.lines.first)
+        raise Error, "kill switch did not reject tools/call" unless response.dig("error", "code") == -32_001
+        raise Error, "audit leaked MCP arguments" if File.read(audit).include?("must-not-appear")
+      end
+      @out.puts("PASS mcp kill switch and audit redaction")
+      @out.puts("PASS mcp 4.3.2 binary identity")
+    end
+
+    def test_xctest(only_testing)
+      source = @env["GHOSTTY_SOURCE_DIR"]
+      raise Error, "set GHOSTTY_SOURCE_DIR to a Ghostty checkout" unless source
+      command = ["#{source}/macos/build.nu", "--action", "test", "--include-ui-tests"]
+      only_testing.each { |test_name| command.concat(["--only-testing", test_name]) }
+      system(*command) || raise(Error, "Ghostty XCTest lane failed")
+    end
+
+    def revoke_tcc
+      [APP_ID, CLI_ID].each do |bundle_id|
+        %w[ScreenCapture Accessibility PostEvent].each do |service|
+          @runner.run("/usr/bin/tccutil", "reset", service, bundle_id, allow_failure: true)
+        end
+      end
+    end
+
+    def remove_empty_owned_directories
+      [@support/"run", @support/"bin", @support, @log_dir].each do |directory|
+        Dir.rmdir(directory) if directory.directory? && directory.children.empty?
+      end
+    end
+
+    def atomic_text(path, content, mode:)
+      FileUtils.mkdir_p(path.dirname, mode: 0o700)
+      Tempfile.create([path.basename.to_s, ".tmp"], path.dirname.to_s) do |file|
+        file.binmode
+        file.write(content)
+        file.flush
+        file.fsync
+        File.chmod(mode, file.path)
+        File.rename(file.path, path)
+      end
+    end
+
+    def usage
+      "Usage: ghostty-automation setup|doctor|enable|disable|test|uninstall"
+    end
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  begin
+    GhosttyAutomation::CLI.new.run(ARGV)
+  rescue OptionParser::ParseError, GhosttyAutomation::Error => e
+    warn("ghostty-automation: #{e.message}")
+    exit 1
+  end
+end

@@ -1,0 +1,279 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "digest"
+require "fileutils"
+require "json"
+require "open3"
+require "optparse"
+require "pathname"
+require "tempfile"
+require "time"
+
+module PeekabooMCPProxy
+  class Error < StandardError; end
+
+  class Audit
+    PERMISSION_KEYS = %w[accessibility screen_recording screenrecording event_synthesizing eventsynthesizing].freeze
+
+    def initialize(path)
+      @path = Pathname(path).expand_path
+      FileUtils.mkdir_p(@path.dirname, mode: 0o700)
+    end
+
+    def write(fields)
+      record = { "timestamp" => Time.now.utc.iso8601(6) }.merge(fields.compact)
+      File.open(@path, File::WRONLY | File::CREAT | File::APPEND, 0o600) do |file|
+        file.flock(File::LOCK_EX)
+        file.write(JSON.generate(record) + "\n")
+      end
+    end
+
+    def request_metadata(message)
+      params = message["params"].is_a?(Hash) ? message["params"] : {}
+      args = params["arguments"].is_a?(Hash) ? params["arguments"] : {}
+      {
+        "category" => category(params["name"]),
+        "bundle_id" => safe_string(args, %w[bundle_id bundleId application_bundle_identifier]),
+        "pid" => safe_integer(args, %w[pid process_id processId]),
+        "window_id" => safe_integer(args, %w[window_id windowId]),
+        "permissions" => permission_booleans(args),
+      }.compact
+    end
+
+    def response_permissions(message)
+      permission_booleans(message)
+    end
+
+    private
+
+    def category(name)
+      value = name.to_s.downcase
+      return "input" if value.match?(/click|type|paste|press|scroll|drag|move|action|set.?value/)
+      return "capture" if value.match?(/image|see|capture/)
+      return "window" if value.match?(/window|app|space|dock|menu|dialog/)
+      return "permission" if value.include?("permission")
+      return "browser" if value.include?("browser")
+
+      "other"
+    end
+
+    def safe_string(hash, keys)
+      key = keys.find { |candidate| hash.key?(candidate) }
+      value = key && hash[key]
+      value.is_a?(String) && value.match?(/\A[A-Za-z0-9.-]+\z/) ? value : nil
+    end
+
+    def safe_integer(hash, keys)
+      key = keys.find { |candidate| hash.key?(candidate) }
+      value = key && hash[key]
+      value.is_a?(Integer) ? value : nil
+    end
+
+    def permission_booleans(value, result = {})
+      case value
+      when Hash
+        value.each do |key, child|
+          normalized = key.to_s.downcase.gsub(/[^a-z]/, "")
+          canonical = PERMISSION_KEYS.find { |candidate| candidate.delete("_") == normalized }
+          result[canonical] = child if canonical && (child == true || child == false)
+          permission_booleans(child, result)
+        end
+      when Array
+        value.each { |child| permission_booleans(child, result) }
+      end
+      result.empty? ? nil : result
+    end
+  end
+
+  class Server
+    def initialize(sentinel:, audit_log:, state:, child_argv:)
+      @sentinel = Pathname(sentinel).expand_path
+      @state = Pathname(state).expand_path
+      @audit = Audit.new(audit_log)
+      @child_argv = child_argv
+      @pending = {}
+    end
+
+    def run
+      validate!
+      Open3.popen3(*@child_argv) do |child_in, child_out, child_err, wait|
+        @child_in = child_in
+        @child_out = child_out
+        @child_err = child_err
+        @wait = wait
+        record_child
+        install_signal_handlers
+        drain_stderr = Thread.new { child_err.read }
+        relay
+        drain_stderr.join(1)
+        wait.value
+      ensure
+        remove_own_state
+      end
+    end
+
+    private
+
+    def validate!
+      raise Error, "missing child command after --" if @child_argv.empty?
+      executable = Pathname(@child_argv.first).expand_path
+      raise Error, "child executable must be an absolute path" unless executable.absolute?
+      raise Error, "child executable is not executable" unless executable.executable?
+      @executable_path = Pathname(File.realpath(executable)).to_s
+      @executable_hash = Digest::SHA256.file(@executable_path).hexdigest
+    end
+
+    def record_child
+      FileUtils.mkdir_p(@state.dirname, mode: 0o700)
+      atomic_json(@state, {
+        "pid" => @wait.pid,
+        "start_time" => process_start(@wait.pid),
+        "executable_path" => @executable_path,
+        "sha256" => @executable_hash,
+        "proxy_pid" => Process.pid,
+      })
+    end
+
+    def relay
+      inputs = [$stdin, @child_out]
+      until inputs.empty?
+        ready = IO.select(inputs, nil, nil, 0.25)&.first || []
+        break unless process_alive?(@wait.pid) || !ready.empty?
+
+        ready.each do |io|
+          if io == $stdin
+            line = $stdin.gets
+            if line
+              handle_request(line)
+            else
+              inputs.delete($stdin)
+              @child_in.close unless @child_in.closed?
+            end
+          else
+            line = @child_out.gets
+            if line
+              handle_response(line)
+            else
+              inputs.delete(@child_out)
+            end
+          end
+        end
+      end
+    end
+
+    def handle_request(line)
+      message = JSON.parse(line)
+      unless message["method"] == "tools/call"
+        @child_in.write(line)
+        @child_in.flush
+        return
+      end
+
+      metadata = @audit.request_metadata(message)
+      if @sentinel.exist?
+        @audit.write(metadata.merge("duration_ms" => 0, "outcome" => "rejected", "error_code" => "kill_switch"))
+        response = {
+          "jsonrpc" => "2.0",
+          "id" => message["id"],
+          "error" => { "code" => -32_001, "message" => "Peekaboo MCP is disabled by local policy" },
+        }
+        $stdout.write(JSON.generate(response) + "\n")
+        $stdout.flush
+        return
+      end
+
+      @pending[message["id"]] = metadata.merge("started" => Process.clock_gettime(Process::CLOCK_MONOTONIC))
+      @child_in.write(line)
+      @child_in.flush
+    rescue JSON::ParserError
+      @child_in.write(line)
+      @child_in.flush
+    end
+
+    def handle_response(line)
+      message = JSON.parse(line)
+      pending = @pending.delete(message["id"])
+      if pending
+        started = pending.delete("started")
+        duration = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
+        error = message["error"]
+        @audit.write(pending.merge(
+          "duration_ms" => duration,
+          "outcome" => error ? "error" : "success",
+          "error_code" => error.is_a?(Hash) ? error["code"] : nil,
+          "permissions" => @audit.response_permissions(message) || pending["permissions"],
+        ))
+      end
+      $stdout.write(line)
+      $stdout.flush
+    rescue JSON::ParserError
+      $stdout.write(line)
+      $stdout.flush
+    end
+
+    def install_signal_handlers
+      %w[INT TERM HUP].each do |signal|
+        Signal.trap(signal) do
+          Process.kill("TERM", @wait.pid) if process_alive?(@wait.pid)
+          exit(128 + Signal.list.fetch(signal))
+        end
+      end
+    end
+
+    def process_start(pid)
+      stdout, status = Open3.capture2({ "LC_ALL" => "C" }, "/bin/ps", "-o", "lstart=", "-p", pid.to_s)
+      raise Error, "cannot read child start time" unless status.success?
+      stdout.strip
+    end
+
+    def process_alive?(pid)
+      Process.kill(0, pid)
+      true
+    rescue Errno::ESRCH
+      false
+    end
+
+    def atomic_json(path, value)
+      Tempfile.create([path.basename.to_s, ".tmp"], path.dirname.to_s) do |file|
+        file.write(JSON.generate(value) + "\n")
+        file.flush
+        file.fsync
+        File.chmod(0o600, file.path)
+        File.rename(file.path, path)
+      end
+    end
+
+    def remove_own_state
+      return unless @state.file?
+      record = JSON.parse(@state.read)
+      FileUtils.rm_f(@state) if record["proxy_pid"] == Process.pid
+    rescue JSON::ParserError
+      nil
+    end
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  options = {}
+  parser = OptionParser.new do |opts|
+    opts.on("--sentinel PATH") { |value| options[:sentinel] = value }
+    opts.on("--audit-log PATH") { |value| options[:audit_log] = value }
+    opts.on("--state PATH") { |value| options[:state] = value }
+  end
+  separator = ARGV.index("--")
+  abort("peekaboo-mcp-proxy: missing -- separator") unless separator
+  option_argv = ARGV.shift(separator)
+  ARGV.shift
+  parser.parse!(option_argv)
+  abort("peekaboo-mcp-proxy: --sentinel and --audit-log are required") unless options[:sentinel] && options[:audit_log]
+  options[:state] ||= File.join(File.dirname(options[:sentinel]), "run", "peekaboo-mcp-child.json")
+
+  begin
+    status = PeekabooMCPProxy::Server.new(**options, child_argv: ARGV).run
+    exit(status.exitstatus || 1)
+  rescue PeekabooMCPProxy::Error => e
+    warn("peekaboo-mcp-proxy: #{e.message}")
+    exit 1
+  end
+end

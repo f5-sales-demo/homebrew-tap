@@ -1,10 +1,10 @@
 class GhosttyAutomation < Formula
   desc "Guarded Peekaboo MCP setup and acceptance tooling for Ghostty"
   homepage "https://github.com/f5-sales-demo/homebrew-tap/blob/main/docs/ghostty-automation.md"
-  url "https://raw.githubusercontent.com/f5-sales-demo/homebrew-tap/18cf0f55bebfcaa3e4ebfdb5f13ccb1908b787f1/bin/ghostty-automation",
+  url "https://raw.githubusercontent.com/f5-sales-demo/homebrew-tap/4ba60d6924751501e89f93eac364cc805d9c6f53/bin/ghostty-automation",
       using: :nounzip
   version "1.0.0"
-  sha256 "f33580ec7838fbad74ff55bb8f123483e92d97660962cbfe70499b3d25215f6d"
+  sha256 "7e5720efba858e83e71f5a549eafbcf9e10486a1676a1c5fcce7086d4e876761"
   license "MIT"
 
   depends_on "peekaboo"

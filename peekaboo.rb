@@ -1,6 +1,7 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Installs the signed Peekaboo command-line client without repackaging it.
 class Peekaboo < Formula
   desc "Secure macOS UI automation CLI"
   homepage "https://github.com/openclaw/Peekaboo"

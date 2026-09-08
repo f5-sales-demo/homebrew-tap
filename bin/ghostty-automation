@@ -148,7 +148,7 @@ module GhosttyAutomation
       @home = Pathname(env.fetch("GHOSTTY_AUTOMATION_HOME", Dir.home)).expand_path
       @support = @home/"Library/Application Support/GhosttyAutomation"
       @log_dir = @home/"Library/Logs/GhosttyAutomation"
-      @socket = @home/"Library/Application Support/Peekaboo/bridge.sock"
+      @socket = @home/"Library/Application Support/Peekaboo/daemon.sock"
       @sentinel = @support/"DISABLED"
       @state = @support/"run/peekaboo-mcp-child.json"
       @proxy = @support/"bin/peekaboo-mcp-proxy"
@@ -175,11 +175,12 @@ module GhosttyAutomation
       install_proxy
       config.write(enabled: true)
       FileUtils.rm_f(@sentinel)
-      @runner.run("/usr/bin/open", "-a", @app.to_s, "--args", "--interactive")
+      @runner.run("/usr/bin/open", "-a", @app.to_s, "--args", "--background-bridge-host")
+      @runner.run(@peekaboo.to_s, "daemon", "start")
       wait_for_socket
       request_permissions
       if @input.tty? && !permissions_granted?
-        @out.puts("Approve Screen Recording, Accessibility, and Event Synthesizing for Peekaboo.app in System Settings.")
+        @out.puts("Approve Screen Recording, Accessibility, and Event Synthesizing for Peekaboo in System Settings.")
         @out.print("Press Return after approval: ")
         @input.gets
       end
@@ -393,7 +394,11 @@ module GhosttyAutomation
         raise Error, "missing socket #{@socket}" unless @socket.socket?
         ok, payload = bridge_status
         raise Error, payload.dig("error", "code") || "bridge authentication failed" unless ok
-        raise Error, "bridge did not identify #{APP_ID}" unless JSON.generate(payload).include?(APP_ID)
+        handshake = payload.dig("data", "selected", "handshake")
+        raise Error, "bridge did not identify #{CLI_ID}" unless handshake.dig("hostIdentity", "bundleIdentifier") == CLI_ID
+        raise Error, "bridge is not an on-demand host" unless handshake["hostKind"] == "onDemand"
+        capabilities = Array(handshake["hostCapabilities"])
+        raise Error, "bridge does not support browser handoff" unless capabilities.include?("browserConnectionHandoff")
       end
       checks["permissions"] = check do
         ok, values = permission_status
@@ -494,9 +499,10 @@ module GhosttyAutomation
         actual = canonical_contract(read_mcp_contract(sentinel, audit))
         expected = canonical_contract(JSON.parse(contract_snapshot.read))
         raise Error, "Peekaboo MCP contract differs from pinned 4.3.2 snapshot" unless actual == expected
+        raise Error, "audit leaked browser status content" if File.read(audit).include?("Detected Chrome")
       end
       @out.puts("PASS mcp kill switch and audit redaction")
-      @out.puts("PASS mcp initialization and 4.3.2 tools/list contract")
+      @out.puts("PASS mcp initialization, browser status, and 4.3.2 tools/list contract")
       source = @env["GHOSTTY_SOURCE_DIR"]
       return unless source
 
@@ -522,6 +528,13 @@ module GhosttyAutomation
         stdin.puts(JSON.generate({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }))
         stdin.flush
         tools = JSON.parse(Timeout.timeout(30) { stdout.gets || raise(Error, "MCP closed during tools/list") })
+        stdin.puts(JSON.generate({
+          jsonrpc: "2.0", id: 3, method: "tools/call",
+          params: { name: "browser", arguments: { action: "status" } },
+        }))
+        stdin.flush
+        browser = JSON.parse(Timeout.timeout(30) { stdout.gets || raise(Error, "MCP closed during browser status") })
+        raise Error, "Peekaboo browser status failed" if browser.dig("result", "isError") != false
         stdin.close
         Process.kill("TERM", wait.pid) if wait.alive?
         init = initialized.fetch("result")

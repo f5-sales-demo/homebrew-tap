@@ -1,18 +1,32 @@
 class Herdr < Formula
-  desc "Agent multiplexer for your terminal (f5-sales-demo fork: resume args + xcsh agent)"
+  desc "Agent multiplexer for your terminal (f5-sales-demo fork)"
   homepage "https://github.com/f5-sales-demo/herdr"
-  url "https://github.com/f5-sales-demo/herdr/archive/refs/tags/v0.7.5-xcsh2.tar.gz"
-  sha256 "e724080aab0650e23acde7d46aaaaf1438f2c496c8c6d811da56cbca57e22a24"
-  license "AGPL-3.0-or-later"
-  version "0.7.5"
-  revision 1
+  version "0.15.7"
+  license "Apache-2.0"
 
-  depends_on "rust" => :build
-  depends_on "zig@0.15" => :build # upstream issue, https://github.com/ogulcancelik/herdr/issues/285
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/f5-sales-demo/herdr/releases/download/v#{version}/herdr-macos-aarch64", using: :nounzip
+      sha256 "89ce889fa1d6bf043e876c9979086a3cd98d470c83f7a33584dc84c70df0a744"
+    else
+      url "https://github.com/f5-sales-demo/herdr/releases/download/v#{version}/herdr-macos-x86_64", using: :nounzip
+      sha256 "900ac4bac1c66d252372449cae79b834b32f7cf7fcc173b2373b51434a3b3419"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/f5-sales-demo/herdr/releases/download/v#{version}/herdr-linux-aarch64", using: :nounzip
+      sha256 "c777cdfe03db3a9914d3706fcf7d3b42548aaddc0746bb04f93d316c5350b433"
+    else
+      url "https://github.com/f5-sales-demo/herdr/releases/download/v#{version}/herdr-linux-x86_64", using: :nounzip
+      sha256 "f327d536f922e1b074f89577ee3946e6032619d839547fab02237ca39d802687"
+    end
+  end
 
   def install
-    ENV.prepend_path "PATH", formula_opt_bin("zig@0.15")
-    system "cargo", "install", *std_cargo_args
+    bin.install Dir["herdr-*"].fetch(0) => "herdr"
+    (bin/"herdr").chmod 0755
     generate_completions_from_executable(bin/"herdr", "completion")
   end
 
@@ -24,6 +38,6 @@ class Herdr < Formula
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/herdr --version")
+    assert_match "herdr #{version}", shell_output("#{bin}/herdr --version")
   end
 end

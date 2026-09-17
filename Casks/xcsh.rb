@@ -1,14 +1,23 @@
 cask "xcsh" do
-  version "21.30.1"
   arch arm: "arm64", intel: "x64"
-  sha256 arm: "adb3e35d0a02936dedf0f0febe27b414699bc55dd0da7dfa031b2822090c0e85", intel: "91542169e060bdc070420774305505eed402bd1c81f67eb2d78d632ecfd64096"
 
-  url "https://github.com/f5-sales-demo/xcsh/releases/download/v21.30.1/xcsh-darwin-#{arch}.pkg"
+  version "21.32.0"
+  sha256 arm:   "0777e2bf029ad8cf732c8c0b95abd9e506a974c6856eb058275b2aaa439d3497",
+         intel: "e662478f3c7053905ab60ff92d09048327986555879bd2f2f263c6ff68fca7b0"
+
+  url "https://github.com/f5-sales-demo/xcsh/releases/download/v#{version}/xcsh-darwin-#{arch}.zip"
   name "xcsh"
   desc "AI coding agent for the terminal"
   homepage "https://github.com/f5-sales-demo/xcsh"
 
-  pkg "xcsh-darwin-#{arch}.pkg"
+  depends_on formula: "ripgrep"
 
-  uninstall pkgutil: "com.f5.xcsh"
+  binary "bin/xcsh"
+
+  postflight_steps do
+    run "bin/xcsh", args: ["chrome", "recycle"], base: :staged_path,
+                    sudo: false, must_succeed: false
+    run "bin/xcsh", args: ["office", "recycle"], base: :staged_path,
+                    sudo: false, must_succeed: false
+  end
 end

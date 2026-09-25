@@ -1,7 +1,7 @@
 cask "herdr" do
-  version "0.18.0"
+  version "0.19.0"
   arch arm: "aarch64", intel: "x86_64"
-  sha256 arm: "bdf37f26cd9e4c69df58362c06679c62d46483b481626becc0efcf45a27f5be3", intel: "5ee1bf8558d6fcd170cfc6052be8093ac4877ac6f02c72027450b8a24c135ceb"
+  sha256 arm: "59639e699e332db8a3dfe5c8c2a3b2c0c2367543f2060b5ad9974ca7489b5820", intel: "91bef4e706cdb09784f592d1e2e303b66e55b81e098031f37cf9647e420cc967"
 
   url "https://github.com/f5-sales-demo/herdr/releases/download/v#{version}/herdr-macos-#{arch}.pkg"
   name "Herdr"

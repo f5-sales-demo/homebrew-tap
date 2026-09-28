@@ -1,26 +1,26 @@
 class Herdr < Formula
   desc "Agent multiplexer for your terminal (f5-sales-demo fork)"
   homepage "https://github.com/f5-sales-demo/herdr"
-  version "0.19.0"
+  version "0.19.1"
   license "Apache-2.0"
 
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/f5-sales-demo/herdr/releases/download/v#{version}/herdr-macos-aarch64", using: :nounzip
-      sha256 "84425dcd967358b1c50f11032a6af2053fd99a6f46b79017f0f582ae5e3b4d5b"
+      sha256 "3a2fcd6b6fcd946d8a63b804345a909edca66c7b4d6f8b23136311e95f63778f"
     else
       url "https://github.com/f5-sales-demo/herdr/releases/download/v#{version}/herdr-macos-x86_64", using: :nounzip
-      sha256 "21fcd3006fbda88a984149a27afb08953e5d022139d276ff9214c955669597ab"
+      sha256 "ae470a57b58964d2c00812f5754a19cc1c8e2cb73be76f34598ffe71360758e1"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
       url "https://github.com/f5-sales-demo/herdr/releases/download/v#{version}/herdr-linux-aarch64", using: :nounzip
-      sha256 "0fd425388e04ffeff5ce75d81a8babc3c234f95cdb3b671fbe551e26e3ee23fa"
+      sha256 "a97c11dc553702a7d4f3ba276d9102d98384567db3a39929a1d880233280ee8d"
     else
       url "https://github.com/f5-sales-demo/herdr/releases/download/v#{version}/herdr-linux-x86_64", using: :nounzip
-      sha256 "3a39991e2880729de34bd524ffeb3b44bd4cc9e3fb116f21799bc5df2f2ada09"
+      sha256 "23da9795e084403c0999e639f4058e902c2ee209c0b4c02ca0f1188448bffa8e"
     end
   end
 

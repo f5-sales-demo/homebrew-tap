@@ -1,9 +1,9 @@
 cask "xcsh" do
   arch arm: "arm64", intel: "x64"
 
-  version "22.4.3"
-  sha256 arm:   "a0d5bb0a999d8afe81252a4c0ff8741db27cbf90a836f7de7bdde84f174bd754",
-         intel: "1c90d937a9dcae18cbf408f436cbf501cbff2d5f86122b0ba0015ae985d46aca"
+  version "22.4.5"
+  sha256 arm:   "63eeaa8d36fc4b774b0f98910a8b02245299379b5ce875b22b00f330fcd1bb58",
+         intel: "21d927342ebab7a5fe0e687c9ceb0133dc1f4d92f732af5874f27ae8fb2383fa"
 
   url "https://github.com/f5-sales-demo/xcsh/releases/download/v#{version}/xcsh-darwin-#{arch}.zip"
   name "xcsh"

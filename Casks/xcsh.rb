@@ -1,16 +1,14 @@
 cask "xcsh" do
   arch arm: "arm64", intel: "x64"
 
-  version "25.0.0"
-  sha256 arm:   "c05d1700148c54b7e783c068413f9aa37dd645694dfc711dfb2af2fee3f94bf5",
-         intel: "6a246720b028a9729500805e0649892134f0176d13fe2ca32dab0092a22f4efa"
+  version "25.1.0"
+  sha256 arm:   "c5f35e8880d353b024d6c98f9ea41fda14e1733f52c1fa1230e6f1c315e6eaa9",
+         intel: "d2df1d7726c71d26f579a669b87a2609697b09b4902a22e00270824bfe568cd2"
 
   url "https://github.com/f5-sales-demo/xcsh/releases/download/v#{version}/xcsh-darwin-#{arch}.zip"
   name "xcsh"
   desc "AI coding agent for the terminal"
   homepage "https://github.com/f5-sales-demo/xcsh"
-
-  depends_on formula: "ripgrep"
 
   binary "bin/xcsh"
 
